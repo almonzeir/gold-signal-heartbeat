@@ -15,7 +15,8 @@ jobs:
       - name: Call the alert job
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: curl -sS -m 90 -H "Authorization: Bearer $CRON_SECRET" https://gold-signal-lab.vercel.app/api/tick | cut -c1-300
+        run: |
+          curl -sS -m 90 -H "Authorization: Bearer $CRON_SECRET" https://gold-signal-lab.vercel.app/api/tick | cut -c1-300
       # GitHub pauses schedules in repos with no activity for 60 days; an empty commit every ~30 days prevents that.
       - uses: actions/checkout@v4
       - name: Keep the schedule alive
