@@ -1,0 +1,26 @@
+# Calls the Gold Signal Lab alert job twice an hour (private repo: stays inside GitHub's free 2,000 minutes/month).
+# Minutes 13 and 43: hourly candles close on the hour and the price feed runs ~10 minutes late.
+name: tick
+on:
+  schedule:
+    - cron: '13,43 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call the alert job
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: curl -sS -m 90 -H "Authorization: Bearer $CRON_SECRET" https://gold-signal-lab.vercel.app/api/tick | cut -c1-300
+      # GitHub pauses schedules in repos with no activity for 60 days; an empty commit every ~30 days prevents that.
+      - uses: actions/checkout@v4
+      - name: Keep the schedule alive
+        run: |
+          if [ $(( $(date +%s) - $(git log -1 --format=%ct) )) -gt $((30*86400)) ]; then
+            git config user.name heartbeat-bot; git config user.email heartbeat-bot@users.noreply.github.com
+            git commit --allow-empty -m "keepalive" && git push
+          fi
