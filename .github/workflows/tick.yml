@@ -1,22 +1,38 @@
-# Calls the Gold Signal Lab alert job twice an hour (private repo: stays inside GitHub's free 2,000 minutes/month).
-# Minutes 13 and 43: hourly candles close on the hour and the price feed runs ~10 minutes late.
+# Calls the Gold Signal Lab alert job every 4 minutes, 24/7.
+# GitHub starts scheduled jobs late (often hours), so each run loops for ~5h45m and then
+# starts the next run itself. The schedule is only a backup that restarts the chain if it ever stops.
+# Only one run at a time; extra starts wait in the queue.
 name: tick
 on:
   schedule:
-    - cron: '13,43 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
+concurrency:
+  group: tick
+  cancel-in-progress: false
 permissions:
   contents: write
+  actions: write
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 355
     steps:
-      - name: Call the alert job
+      - name: Call the alert job every 4 minutes
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -sS -m 90 -H "Authorization: Bearer $CRON_SECRET" https://gold-signal-lab.vercel.app/api/tick | cut -c1-300
+          end=$((SECONDS + 345*60))
+          while [ $SECONDS -lt $end ]; do
+            curl -sS -m 90 -H "Authorization: Bearer $CRON_SECRET" https://gold-signal-lab.vercel.app/api/tick | cut -c1-200 || echo "call failed"
+            echo
+            sleep 240
+          done
+      - name: Start the next run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run tick.yml -R "$GITHUB_REPOSITORY"
       # GitHub pauses schedules in repos with no activity for 60 days; an empty commit every ~30 days prevents that.
       - uses: actions/checkout@v4
       - name: Keep the schedule alive
